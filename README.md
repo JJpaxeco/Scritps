@@ -190,10 +190,3 @@ Exemplo:
 - Habilitar `-FollowReparsePoints` pode aumentar muito o tempo e gerar duplicidades.
 
 ---
-
-## Estrutura esperada
-```text
-Find-FilesFast.ps1
-TemaEscuro_transparenciaOFF.ps1
-README.md
-```
