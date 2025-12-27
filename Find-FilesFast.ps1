@@ -4,6 +4,35 @@
 
 .REQUIREMENTS
   Recomendado: PowerShell 7+ (para -Parallel). Em PowerShell 5.1, o script roda sem paralelismo.
+
+.EXAMPLES
+  # 1) Buscar por termo no caminho completo (padrão: -Mode Contains, -MatchOn FullPath)
+  .\Find-FilesFast.ps1 -Query "backup"
+
+  # 2) Buscar por termo apenas no nome do arquivo
+  .\Find-FilesFast.ps1 -Query "relatorio" -MatchOn Name
+
+  # 3) Buscar por termo apenas na extensão
+  .\Find-FilesFast.ps1 -Query ".ps1" -MatchOn Extension
+
+  # 4) Modo Wildcard (usa * e ?)
+  .\Find-FilesFast.ps1 -Query "*relatorio*2025*.pdf" -Mode Wildcard -MatchOn Name
+
+  # 5) Modo Regex (expressão regular)
+  .\Find-FilesFast.ps1 -Query "^(report|relatorio).*\.(pdf|docx)$" -Mode Regex -MatchOn Name
+
+  # 6) Filtrar por extensões (uma ou várias)
+  .\Find-FilesFast.ps1 -Extensions ".json"
+  .\Find-FilesFast.ps1 -Extensions ".dll",".dat"
+
+  # 7) Combinar extensões + termo (ex.: só .log que contenham "error" no nome)
+  .\Find-FilesFast.ps1 -Extensions ".log" -Query "error" -MatchOn Name
+
+  # 8) Combinar MatchOn múltiplo (nome OU caminho)
+  .\Find-FilesFast.ps1 -Query "Financeiro" -MatchOn Name,FullPath
+
+  # 9) Regex no caminho completo (ex.: qualquer pasta Temp + .tmp)
+  .\Find-FilesFast.ps1 -Query "\\Temp\\.*\.tmp$" -Mode Regex -MatchOn FullPath
 #>
 
 [CmdletBinding()]
