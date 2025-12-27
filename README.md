@@ -188,3 +188,5 @@ Exemplo:
 - A busca completa pode levar tempo dependendo do tamanho dos discos, quantidade de arquivos e permissões.
 - Pastas inacessíveis são ignoradas; detalhes podem aparecer no log (`-LogErrorsPath`) e/ou no TXT gerado.
 - Habilitar `-FollowReparsePoints` pode aumentar muito o tempo e gerar duplicidades.
+
+---
