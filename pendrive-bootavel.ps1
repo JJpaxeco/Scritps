@@ -100,16 +100,13 @@ function Select-UsbDiskInteractive {
       DiskNumber     = $d.Number
       FriendlyName   = $d.FriendlyName
       SizeGB         = $sizeGB
-      PartitionStyle = $d.PartitionStyle
-      IsReadOnly     = $d.IsReadOnly
-      IsOffline      = $d.IsOffline
       Partitions     = $partCount
       BusType        = $d.BusType
     }
     $list += $obj
 
-    Write-Host ("ID: [{0}]  Disk: {1}  Name: {2}  Size: {3} GB  Style: {4}  Parts: {5}  Bus: {6}  RO: {7}  Offline: {8}" -f `
-      $obj.ID, $obj.DiskNumber, $obj.FriendlyName, $obj.SizeGB, $obj.PartitionStyle, $obj.Partitions, $obj.BusType, $obj.IsReadOnly, $obj.IsOffline) -ForegroundColor Yellow
+    Write-Host ("ID: {0} | Disco: {1} - Nome: {2} - Tamanho: {3} GB - Conectado via: {4}" -f `
+      $obj.ID, $obj.DiskNumber, $obj.FriendlyName, $obj.SizeGB, $obj.BusType) -ForegroundColor Yellow
 
     $i++
   }
@@ -127,7 +124,7 @@ function Select-FileSystemInteractive {
   Write-Info "Escolha a formatacao:"
   Write-Host "1 - FAT32 (Recomendado para UEFI; limita arquivos a ~4GB)"
   Write-Host "2 - NTFS  (Pode falhar em UEFI puro; bom para arquivos grandes)"
-  $opt = Read-Host "Digite a opcao (1 ou 2)"
+  $opt = Read-Host "Digite a opcao (1 ou 2):"
   switch ($opt) {
     '1' { return 'FAT32' }
     '2' { return 'NTFS' }
