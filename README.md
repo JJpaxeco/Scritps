@@ -1,4 +1,4 @@
-# Scripts PowerShell — Find-FilesFast + Tema Escuro
+# Scripts PowerShell
 
 Este repositório contém dois scripts PowerShell voltados para tarefas comuns no Windows:
 
