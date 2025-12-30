@@ -100,13 +100,16 @@ function Select-UsbDiskInteractive {
       DiskNumber     = $d.Number
       FriendlyName   = $d.FriendlyName
       SizeGB         = $sizeGB
+      PartitionStyle = $d.PartitionStyle
+      IsReadOnly     = $d.IsReadOnly
+      IsOffline      = $d.IsOffline
       Partitions     = $partCount
       BusType        = $d.BusType
     }
     $list += $obj
 
-    Write-Host ("ID: {0} | Disco: {1} - Nome: {2} - Tamanho: {3} GB - Conectado via: {4}" -f `
-      $obj.ID, $obj.DiskNumber, $obj.FriendlyName, $obj.SizeGB, $obj.BusType) -ForegroundColor Yellow
+    Write-Host ("ID [{0}] | Nome: {1} - Tamanho: {2} GB - Conectado via: {3}" -f `
+      $obj.ID, $obj.FriendlyName, $obj.SizeGB, $obj.BusType) -ForegroundColor Yellow
 
     $i++
   }
@@ -121,10 +124,11 @@ function Select-UsbDiskInteractive {
 }
 
 function Select-FileSystemInteractive {
+  Write-Host "----------------------------------------------------------------"
   Write-Info "Escolha a formatacao:"
   Write-Host "1 - FAT32 (Recomendado para UEFI; limita arquivos a ~4GB)"
   Write-Host "2 - NTFS  (Pode falhar em UEFI puro; bom para arquivos grandes)"
-  $opt = Read-Host "Digite a opcao (1 ou 2):"
+  $opt = Read-Host "Digite a opcao (1 ou 2)"
   switch ($opt) {
     '1' { return 'FAT32' }
     '2' { return 'NTFS' }
@@ -134,17 +138,18 @@ function Select-FileSystemInteractive {
 
 function Confirm-Destructive([int]$DiskNum, [string]$DiskName, [double]$SizeGB) {
   if ($Force) { return }
-
+  Write-Host "----------------------------------------------------------------"
   Write-Err "ATENCAO: TODOS OS DADOS NO DISCO SERAO APAGADOS PERMANENTEMENTE."
-  Write-Host ("Alvo: Disk {0} | {1} | {2} GB" -f $DiskNum, $DiskName, $SizeGB) -ForegroundColor Red -BackgroundColor Black
+  Write-Host ("Alvo:  {0} - {1} GB" -f $DiskName, $SizeGB) -ForegroundColor Red -BackgroundColor Black
   Write-Host ""
 
-  $mustType = "CONFIRMO"
+  $mustType = "SIM"
   $typed = (Read-Host ("Para continuar, digite {0}" -f $mustType)).Trim()
   if ($typed -ne $mustType) { throw "Operacao cancelada pelo usuario." }
 }
 
 function Mount-IsoAndGetDrive([string]$path) {
+  Write-Host "----------------------------------------------------------------"
   Write-Info "`n[1/6] Montando imagem ISO..."
   $isoObj = Mount-DiskImage -ImagePath $path -PassThru -ErrorAction Stop
 
@@ -361,6 +366,7 @@ try {
       SizeGB       = [double]$picked.SizeGB
     }
     Write-Ok ("Dispositivo selecionado: Disk {0} | {1}" -f $selected.DiskNumber, $selected.FriendlyName)
+    Write-Host "----------------------------------------------------------------"
   }
 
   # ISO
