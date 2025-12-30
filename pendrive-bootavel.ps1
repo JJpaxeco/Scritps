@@ -66,6 +66,40 @@ function Get-VolumeLabel([string]$fs) {
   return 'WINBOOTNTFS'                          # 11
 }
 
+# NEW: tenta abrir seletor de arquivos (OpenFileDialog). Se falhar, retorna $null.
+function Select-IsoPathFileDialog {
+  param(
+    [string]$Title = "Select Windows ISO",
+    [string]$InitialDirectory = $env:USERPROFILE
+  )
+
+  try {
+    Add-Type -AssemblyName System.Windows.Forms | Out-Null
+  } catch {
+    return $null
+  }
+
+  try {
+    $dlg = New-Object System.Windows.Forms.OpenFileDialog
+    $dlg.Title = $Title
+    $dlg.Filter = "ISO (*.iso)|*.iso|All files (*.*)|*.*"
+    $dlg.InitialDirectory = $InitialDirectory
+    $dlg.Multiselect = $false
+    $dlg.CheckFileExists = $true
+    $dlg.CheckPathExists = $true
+
+    $res = $dlg.ShowDialog()
+    if ($res -eq [System.Windows.Forms.DialogResult]::OK) {
+      return $dlg.FileName
+    }
+  } catch {
+    # Pode falhar em PowerShell 7 (MTA), Server Core, sessoes sem GUI, etc.
+    return $null
+  }
+
+  return $null
+}
+
 function Get-UsbDisks {
   $all = Get-Disk
 
@@ -266,7 +300,6 @@ function Prepare-UsbDisk([int]$DiskNum, [string]$FsType, [string]$Label) {
   if ($disk.PartitionStyle -eq 'RAW') {
     Initialize-Disk -Number $DiskNum -PartitionStyle MBR -ErrorAction Stop | Out-Null
   } elseif ($disk.PartitionStyle -eq 'GPT') {
-    # Em midia removivel, normalmente nao ocorre, mas deixa claro se acontecer.
     throw "Disco esta GPT. Para forcar MBR sem DiskPart, ajuste manualmente ou use uma midia que nao esteja GPT."
   }
 
@@ -369,10 +402,20 @@ try {
     Write-Host "----------------------------------------------------------------"
   }
 
-  # ISO
-  if (-not $IsoPath) { $IsoPath = Read-Host "Digite ou cole o caminho completo do arquivo ISO (ex: C:\Win11.iso)" }
+  # ISO (UPDATED: confirma sempre apos validar o caminho)
+  if (-not $IsoPath) {
+    $pickedIso = Select-IsoPathFileDialog
+    if ($pickedIso) {
+      $IsoPath = $pickedIso
+    } else {
+      Write-Warn "Seletor de arquivos indisponivel. Use copiar/colar ou arraste e solte o arquivo ISO no console."
+      $IsoPath = Read-Host "Digite/cole (ou arraste e solte) o caminho completo do arquivo ISO"
+    }
+  }
+
   $IsoPath = Normalize-Path $IsoPath
   if (-not (Test-Path $IsoPath)) { throw ("Arquivo ISO nao encontrado em: {0}" -f $IsoPath) }
+  Write-Ok ("ISO selecionada: {0}" -f $IsoPath)
 
   # FileSystem
   if (-not $FileSystem) { $FileSystem = Select-FileSystemInteractive }
