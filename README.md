@@ -4,7 +4,7 @@ Este repositório contém três scripts PowerShell voltados para tarefas comuns 
 
 - **Find-FilesFast.ps1**: busca de arquivos em **todos os discos/volumes** com foco em desempenho (paralelismo no PowerShell 7+), com **barra de progresso** e **salvamento automático** dos resultados em TXT.
 - **TemaEscuro_transparenciaOFF.ps1**: aplica **Modo Escuro** e **desativa transparência** (perfil do usuário), reiniciando o Explorer para aplicar imediatamente.
-- **pendrive-bootavel_gemini.ps1**: cria pendrive bootável do Windows a partir de uma ISO (FAT32/NTFS), com split automático de `install.wim` em `install.swm` quando necessário.
+- **pendrive-bootavel.ps1**: cria pendrive bootável do Windows a partir de uma ISO (FAT32/NTFS), com split automático de `install.wim` em `install.swm` quando necessário.
 
 ---
 
@@ -38,7 +38,7 @@ Este repositório contém três scripts PowerShell voltados para tarefas comuns 
 ```powershell
 .\Find-FilesFast.ps1 -Extensions ".ps1"
 .\TemaEscuro_transparenciaOFF.ps1
-.\pendrive-bootavel_gemini.ps1
+.\pendrive-bootavel.ps1
 ```
 
 Se sua política de execução bloquear scripts, uma opção comum é liberar apenas na sessão atual:
@@ -207,19 +207,19 @@ Exemplo:
 
 ### Interativo (recomendado)
 ```powershell
-.\pendrive-bootavel_gemini.ps1
+.\pendrive-bootavel.ps1
 ```
 
 ### Não interativo (com parâmetros)
 ```powershell
 # ISO + filesystem (selecao do disco ainda sera solicitada)
-.\pendrive-bootavel_gemini.ps1 -IsoPath "C:\ISO\Win10.iso" -FileSystem FAT32
+.\pendrive-bootavel.ps1 -IsoPath "C:\ISO\Win10.iso" -FileSystem FAT32
 
 # Totalmente nao interativo (CUIDADO: apaga o disco informado)
-.\pendrive-bootavel_gemini.ps1 -IsoPath "C:\ISO\Win11.iso" -DiskNumber 1 -FileSystem FAT32 -Force
+.\pendrive-bootavel.ps1 -IsoPath "C:\ISO\Win11.iso" -DiskNumber 1 -FileSystem FAT32 -Force
 
 # Com log completo via Transcript
-.\pendrive-bootavel_gemini.ps1 -IsoPath "C:\ISO\Win10.iso" -DiskNumber 1 -FileSystem NTFS -Force -LogPath "C:\Temp\pendrive-bootavel.log"
+.\pendrive-bootavel.ps1 -IsoPath "C:\ISO\Win10.iso" -DiskNumber 1 -FileSystem NTFS -Force -LogPath "C:\Temp\pendrive-bootavel.log"
 ```
 
 ## Parâmetros
