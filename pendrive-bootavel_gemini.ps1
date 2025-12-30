@@ -142,8 +142,8 @@ function Confirm-Destructive([int]$DiskNum, [string]$DiskName, [double]$SizeGB) 
   Write-Host ("Alvo: Disk {0} | {1} | {2} GB" -f $DiskNum, $DiskName, $SizeGB) -ForegroundColor Red -BackgroundColor Black
   Write-Host ""
 
-  $mustType = "APAGAR DISCO $DiskNum"
-  $typed = (Read-Host ("Para confirmar, digite: {0}" -f $mustType)).Trim()
+  $mustType = "CONFIRMO"
+  $typed = (Read-Host ("Para continuar, digite {0}" -f $mustType)).Trim()
   if ($typed -ne $mustType) { throw "Operacao cancelada pelo usuario." }
 }
 
@@ -393,16 +393,16 @@ try {
   if ($FileSystem -eq 'FAT32') {
     if ($img.IsWim -and $img.SizeBytes -ge 4GB) {
       $needsSplit = $true
-      Write-Warn "Decisao: install.wim >= 4GB e destino FAT32. Sera dividido (SWM)."
+      Write-Warn "Arquivo install.wim >= 4GB e destino e FAT32. Precisara ser dividido em arquivos install.swm."
     } elseif ($img.IsEsd -and $img.SizeBytes -ge 4GB) {
       $needsEsdConvert = $true
       $needsSplit = $true
-      Write-Warn "Decisao: install.esd >= 4GB e destino FAT32. Sera convertido para WIM e dividido (SWM)."
+      Write-Warn "Arquivo install.esd >= 4GB e destino e FAT32. Sera convertido para WIM e dividido em arquivos install.swm."
     } else {
-      Write-Ok "Decisao: arquivo de instalacao cabe em FAT32. Copia direta."
+      Write-Ok "Arquivo install.esd cabe em FAT32. Divisao nao necessaria, copia direta."
     }
   } else {
-    Write-Ok "Decisao: destino NTFS. Divisao nao necessaria."
+    Write-Ok "Arquivo install.wim cabe em NTFS. Divisao nao necessaria, copia direta."
   }
 
   # Preparar USB (label seguro)
