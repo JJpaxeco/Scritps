@@ -230,7 +230,7 @@ Exemplo:
 - `-LogPath` (string): salva um transcript (log completo) em arquivo.
 
 ## Observações e comportamento
-- Confirmação de segurança: o script exige digitar exatamente `CONFIRMO` antes de apagar.
+- Confirmação de segurança: o script exige digitar exatamente `SIM` antes de apagar.
 - FAT32 tem limite de arquivo de ~4GB. O split em SWM é feito com `FileSize:3800` (margem segura).
 - Se a ISO usar `install.esd` grande, a conversão pode exigir espaço livre no `%TEMP%` de aproximadamente **3x** o tamanho do ESD.
 - Robocopy: `ExitCode` **0..7** = sucesso (com variações); **>= 8** = falha. Exemplo comum: `ExitCode=3` indica sucesso com cópia + extras detectados.
