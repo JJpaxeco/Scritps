@@ -579,7 +579,7 @@ $searchTag = $searchTag -replace '\s+', '_'
 $searchTag = $searchTag.Trim('_')
 if ($searchTag.Length -gt 80) { $searchTag = $searchTag.Substring(0, 80) }
 
-$outTxtPath = Join-Path $scriptDir ("Search-{0}-Result_{1}.txt" -f $searchTag,(Get-Date -Format 'dd-MM-yyyy_HH-mm-ss'))
+$outTxtPath = Join-Path $scriptDir ("Find-FilesFast-{0}-Result_{1}.txt" -f $searchTag,(Get-Date -Format 'dd-MM-yyyy_HH-mm-ss'))
 
 $queryLabel = if ([string]::IsNullOrWhiteSpace($Query)) { '(vazio)' } else { $Query }
 $extensionsLabel = if ($Extensions -and @($Extensions).Count -gt 0) { ((@($Extensions) | Where-Object { $_ }) -join ', ') } else { '(nenhuma)' }
