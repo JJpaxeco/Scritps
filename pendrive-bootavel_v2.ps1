@@ -34,10 +34,10 @@ param(
   [Parameter(Mandatory = $false)]
   [string]$LogPath
 )
-
+#"$(Get-Date -Format o) | PSEdition=$($PSVersionTable.PSEdition) | PSVersion=$($PSVersionTable.PSVersion)" | Out-File -FilePath "C:\Arquivos\ps2exe-version.log" -Append -Encoding utf8
 Set-StrictMode -Version 2.0
 
-# --------------------- PREFERIR POWERSHELL 7 (pwsh) ---------------------
+# --------------------- PREFERIR POWERSHELL 7 (pwsh) (somente quando .ps1 no disco) ---------------------
 function Get-RelaunchArgs {
   $out = New-Object System.Collections.Generic.List[string]
   foreach ($k in $PSBoundParameters.Keys) {
@@ -53,21 +53,21 @@ function Get-RelaunchArgs {
   return $out.ToArray()
 }
 
-$scriptSelf = $PSCommandPath
-if (-not $scriptSelf) { $scriptSelf = $MyInvocation.MyCommand.Path }
+# Só tenta relançar se estivermos executando um ARQUIVO .ps1 existente.
+if ($PSVersionTable.PSEdition -ne 'Core' -and -not $env:PENDRIVE_BOOT_NO_PWSH -and
+    $PSCommandPath -and (Test-Path -LiteralPath $PSCommandPath) -and
+    ([IO.Path]::GetExtension($PSCommandPath) -ieq '.ps1')) {
 
-# Se estiver no Windows PowerShell (Desktop), tenta relancar no PS7 (Core) primeiro.
-if ($PSVersionTable.PSEdition -ne 'Core' -and -not $env:PENDRIVE_BOOT_NO_PWSH) {
   $pwshCmd = Get-Command pwsh.exe -ErrorAction SilentlyContinue
   if ($pwshCmd -and $pwshCmd.Source) {
     try {
-      $env:PENDRIVE_BOOT_NO_PWSH = '1' # evita loop (child herda)
+      $env:PENDRIVE_BOOT_NO_PWSH = '1'
       $childArgs = Get-RelaunchArgs
-      & $pwshCmd.Source -NoProfile -ExecutionPolicy Bypass -File $scriptSelf @childArgs
+      & $pwshCmd.Source -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath @childArgs
       exit $LASTEXITCODE
     } catch {
-      # Falhou relancar no PS7 -> continua no Windows PowerShell
       $env:PENDRIVE_BOOT_NO_PWSH = '1'
+      # Falhou relançar -> segue no Windows PowerShell
     }
   }
 }
