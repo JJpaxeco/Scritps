@@ -19,7 +19,7 @@
   .\Find-FilesFast.ps1 -Query "*relatorio*2025*.pdf" -Mode Wildcard -MatchOn Name
 
   # 5) Modo Regex (expressão regular)
-  .\Find-FilesFast.ps1 -Query "^(report|relatorio).*\. (pdf|docx)$" -Mode Regex -MatchOn Name
+  .\Find-FilesFast.ps1 -Query "^(report|relatorio).*\.(pdf|docx)$" -Mode Regex -MatchOn Name
 
   # 6) Filtrar por extensões (uma ou várias)
   .\Find-FilesFast.ps1 -Extensions ".json"
@@ -34,8 +34,11 @@
   # 9) Regex no caminho completo (ex.: qualquer pasta Temp + .tmp)
   .\Find-FilesFast.ps1 -Query "\\Temp\\.*\.tmp$" -Mode Regex -MatchOn FullPath
 
-  # 10) Unidades mapeadas + UNC direto
+  # 10) Unidades mapeadas + UNC direto (somente se informado via parâmetro)
   .\Find-FilesFast.ps1 -Extensions ".ps1" -IncludeNetworkDrives -NetworkRoots "\\SRV01\Dados","\\SRV02\Backups"
+
+  # 11) Incluir USB/removíveis (DriveType 2)
+  .\Find-FilesFast.ps1 -Extensions ".mkv" -IncludeUsbDrives
 #>
 
 [CmdletBinding()]
@@ -50,7 +53,10 @@ param(
 
   [string[]]$Extensions,
 
-  # Incluir unidades de rede mapeadas (DriveType 4)
+  # Incluir dispositivos USB/removíveis (DriveType 2)
+  [switch]$IncludeUsbDrives,
+
+  # Incluir unidades de rede mapeadas (DriveType 4) - SOMENTE se informado
   [switch]$IncludeNetworkDrives,
 
   # Incluir CD/DVD (DriveType 5)
@@ -83,27 +89,54 @@ $ErrorActionPreference = 'Stop'
 
 function Get-SearchRoots {
   param(
+    [switch]$IncludeUsbDrives,
     [switch]$IncludeNetworkDrives,
     [switch]$IncludeOpticalDrives,
     [switch]$IncludeVolumesWithoutDriveLetter
   )
 
-  $driveTypes = @(2,3) # 2=Removable, 3=Fixed
-  if ($IncludeNetworkDrives) { $driveTypes += 4 }
-  if ($IncludeOpticalDrives) { $driveTypes += 5 }
+  # Por padrão: somente FIXED (3) = discos físicos instalados
+  $driveTypes = @(3) # 3=Fixed
+  if ($IncludeUsbDrives)      { $driveTypes += 2 } # 2=Removable (USB)
+  if ($IncludeNetworkDrives)  { $driveTypes += 4 } # 4=Network (mapeadas)
+  if ($IncludeOpticalDrives)  { $driveTypes += 5 } # 5=CD-ROM
 
   $roots = New-Object System.Collections.Generic.List[string]
 
   try {
     $logical = Get-CimInstance Win32_LogicalDisk | Where-Object { $driveTypes -contains $_.DriveType -and $_.DeviceID }
-    foreach ($d in $logical) { [void]$roots.Add(($d.DeviceID.TrimEnd('\') + '\')) }
+    foreach ($d in $logical) {
+      [void]$roots.Add(($d.DeviceID.TrimEnd('\') + '\'))
+    }
   } catch {
-    foreach ($d in (Get-PSDrive -PSProvider FileSystem)) { if ($d.Root) { [void]$roots.Add($d.Root) } }
+    try {
+      foreach ($di in [System.IO.DriveInfo]::GetDrives()) {
+        try {
+          $ok = $false
+          switch ($di.DriveType) {
+            'Fixed'     { $ok = ($driveTypes -contains 3) }
+            'Removable' { $ok = ($driveTypes -contains 2) }
+            'Network'   { $ok = ($driveTypes -contains 4) }
+            'CDRom'     { $ok = ($driveTypes -contains 5) }
+            default     { $ok = $false }
+          }
+
+          if ($ok -and $di.IsReady -and $di.RootDirectory -and $di.RootDirectory.FullName) {
+            [void]$roots.Add($di.RootDirectory.FullName)
+          }
+        } catch { }
+      }
+    } catch { }
   }
 
   if ($IncludeVolumesWithoutDriveLetter) {
+    $volTypes = @(3)
+    if ($IncludeUsbDrives) { $volTypes += 2 }
+
     try {
-      $vols = Get-CimInstance Win32_Volume | Where-Object { $_.DriveLetter -eq $null -and $_.Name -and ($_.DriveType -in 2,3) }
+      $vols = Get-CimInstance Win32_Volume | Where-Object {
+        $_.DriveLetter -eq $null -and $_.Name -and ($_.DriveType -in $volTypes)
+      }
       foreach ($v in $vols) {
         $name = $v.Name
         if ($name -and $name -notmatch '\\$') { $name += '\' }
@@ -112,7 +145,10 @@ function Get-SearchRoots {
     } catch { }
   }
 
-  $roots | Where-Object { $_ -and $_.Length -ge 3 } | ForEach-Object { $_.Trim() } | Sort-Object -Unique
+  $roots |
+    Where-Object { $_ -and $_.Length -ge 3 } |
+    ForEach-Object { $_.Trim() } |
+    Sort-Object -Unique
 }
 
 function Get-TopLevelWorkItems {
@@ -144,6 +180,20 @@ function Normalize-Extensions {
     [void]$set.Add($ext)
   }
   return $set
+}
+
+function Get-FilePatternsFromExtensionSet {
+  param($ExtensionSet)
+
+  if (-not $ExtensionSet) { return @('*') }
+
+  $patterns = New-Object System.Collections.Generic.List[string]
+  foreach ($ext in $ExtensionSet) {
+    if ([string]::IsNullOrWhiteSpace($ext)) { continue }
+    $patterns.Add(('*' + $ext)) | Out-Null  # ex.: *.mkv
+  }
+  if ($patterns.Count -eq 0) { return @('*') }
+  return $patterns.ToArray()
 }
 
 function New-MatchEvaluator {
@@ -189,11 +239,14 @@ function Search-Path {
     [bool]$Recurse,
     [scriptblock]$IsMatch,
     [bool]$IncludeMetadata,
-    [bool]$FollowReparsePoints
+    [bool]$FollowReparsePoints,
+    $ExtensionSet
   )
 
   $results = [System.Collections.Generic.List[object]]::new()
   $errors  = [System.Collections.Generic.List[string]]::new()
+
+  $patterns = Get-FilePatternsFromExtensionSet -ExtensionSet $ExtensionSet
 
   $canUseEnumOptions = $false
   try { $null = [System.IO.EnumerationOptions]; $canUseEnumOptions = $true } catch { $canUseEnumOptions = $false }
@@ -218,57 +271,68 @@ function Search-Path {
   while ($stack.Count -gt 0) {
     $dir = $stack.Pop()
 
-    # Arquivos do diretório atual
+    # Arquivos do diretório atual (COM PADRÃO: *.ext quando Extensions foi informado)
     try {
       if ($canUseEnumOptions -and $enumOpt) {
-        foreach ($f in [System.IO.Directory]::EnumerateFiles($dir, '*', $enumOpt)) {
-          try {
-            $name = [System.IO.Path]::GetFileName($f)
-            $ext  = [System.IO.Path]::GetExtension($f)
-            if (& $IsMatch $f $name $ext) {
-              if ($IncludeMetadata) {
-                try {
-                  $fi = [System.IO.FileInfo]::new($f)
-                  $results.Add([pscustomobject]@{
-                    FullName         = $fi.FullName
-                    Name             = $fi.Name
-                    Extension        = $fi.Extension
-                    LengthBytes      = $fi.Length
-                    LastWriteTimeUtc = $fi.LastWriteTimeUtc
-                  }) | Out-Null
-                } catch {
+        foreach ($pat in $patterns) {
+          foreach ($f in [System.IO.Directory]::EnumerateFiles($dir, $pat, $enumOpt)) {
+            try {
+              $name = [System.IO.Path]::GetFileName($f)
+              $ext  = [System.IO.Path]::GetExtension($f)
+
+              # Blindagem extra: se ExtensionSet existir, confere também (não deveria ser necessário, mas garante)
+              if ($ExtensionSet) { if (-not $ExtensionSet.Contains($ext)) { continue } }
+
+              if (& $IsMatch $f $name $ext) {
+                if ($IncludeMetadata) {
+                  try {
+                    $fi = [System.IO.FileInfo]::new($f)
+                    $results.Add([pscustomobject]@{
+                      FullName         = $fi.FullName
+                      Name             = $fi.Name
+                      Extension        = $fi.Extension
+                      LengthBytes      = $fi.Length
+                      LastWriteTimeUtc = $fi.LastWriteTimeUtc
+                    }) | Out-Null
+                  } catch {
+                    $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
+                  }
+                } else {
                   $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
                 }
-              } else {
-                $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
               }
-            }
-          } catch { }
+            } catch { }
+          }
         }
       } else {
-        foreach ($f in [System.IO.Directory]::EnumerateFiles($dir, '*', [System.IO.SearchOption]::TopDirectoryOnly)) {
-          try {
-            $name = [System.IO.Path]::GetFileName($f)
-            $ext  = [System.IO.Path]::GetExtension($f)
-            if (& $IsMatch $f $name $ext) {
-              if ($IncludeMetadata) {
-                try {
-                  $fi = [System.IO.FileInfo]::new($f)
-                  $results.Add([pscustomobject]@{
-                    FullName         = $fi.FullName
-                    Name             = $fi.Name
-                    Extension        = $fi.Extension
-                    LengthBytes      = $fi.Length
-                    LastWriteTimeUtc = $fi.LastWriteTimeUtc
-                  }) | Out-Null
-                } catch {
+        foreach ($pat in $patterns) {
+          foreach ($f in [System.IO.Directory]::EnumerateFiles($dir, $pat, [System.IO.SearchOption]::TopDirectoryOnly)) {
+            try {
+              $name = [System.IO.Path]::GetFileName($f)
+              $ext  = [System.IO.Path]::GetExtension($f)
+
+              if ($ExtensionSet) { if (-not $ExtensionSet.Contains($ext)) { continue } }
+
+              if (& $IsMatch $f $name $ext) {
+                if ($IncludeMetadata) {
+                  try {
+                    $fi = [System.IO.FileInfo]::new($f)
+                    $results.Add([pscustomobject]@{
+                      FullName         = $fi.FullName
+                      Name             = $fi.Name
+                      Extension        = $fi.Extension
+                      LengthBytes      = $fi.Length
+                      LastWriteTimeUtc = $fi.LastWriteTimeUtc
+                    }) | Out-Null
+                  } catch {
+                    $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
+                  }
+                } else {
                   $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
                 }
-              } else {
-                $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
               }
-            }
-          } catch { }
+            } catch { }
+          }
         }
       }
     } catch {
@@ -306,10 +370,15 @@ if (-not $Query -and (-not $Extensions -or @($Extensions).Count -eq 0)) {
   throw 'Informe -Query e/ou -Extensions. Ex.: -Query "report" ou -Extensions ".dll",".dat".'
 }
 
-$roots = @(Get-SearchRoots -IncludeNetworkDrives:$IncludeNetworkDrives -IncludeOpticalDrives:$IncludeOpticalDrives -IncludeVolumesWithoutDriveLetter:$IncludeVolumesWithoutDriveLetter)
+$roots = @(Get-SearchRoots `
+  -IncludeUsbDrives:$IncludeUsbDrives `
+  -IncludeNetworkDrives:$IncludeNetworkDrives `
+  -IncludeOpticalDrives:$IncludeOpticalDrives `
+  -IncludeVolumesWithoutDriveLetter:$IncludeVolumesWithoutDriveLetter
+)
+
 if (-not $roots -or $roots.Count -eq 0) { throw "Não foi possível identificar discos/volumes para busca." }
 
-# Adicionar roots UNC informados manualmente
 if ($NetworkRoots -and @($NetworkRoots).Count -gt 0) {
   foreach ($nr in @($NetworkRoots)) {
     if ([string]::IsNullOrWhiteSpace($nr)) { continue }
@@ -322,12 +391,12 @@ if ($NetworkRoots -and @($NetworkRoots).Count -gt 0) {
 
 $workItems = @(Get-TopLevelWorkItems -Roots $roots)
 
-# --- Progresso (por work item concluído) ---
+# --- Progresso ---
 $totalWork = $workItems.Count
 $doneWork  = 0
 $progressEvery = if ($totalWork -le 200) { 1 } else { 25 }
 $activity = "Find-FilesFast - Pesquisando"
-# -----------------------------------------
+# ---------------
 
 $allResults = [System.Collections.Generic.List[object]]::new()
 $allErrors  = [System.Collections.Generic.List[string]]::new()
@@ -365,6 +434,13 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
         }
       }
 
+      $patterns = @('*')
+      if ($extSet) {
+        $list = New-Object System.Collections.Generic.List[string]
+        foreach ($x in $extSet) { $list.Add(('*' + $x)) | Out-Null }  # *.mkv
+        if ($list.Count -gt 0) { $patterns = $list.ToArray() }
+      }
+
       $rx = $null
       if ($q -and $m -eq 'Regex') { $rx = [regex]::new($q, [Text.RegularExpressions.RegexOptions]::IgnoreCase) }
 
@@ -400,24 +476,30 @@ if ($PSVersionTable.PSVersion.Major -ge 7) {
       while ($stack.Count -gt 0) {
         $dir = $stack.Pop()
 
+        # Arquivos: usa *.ext quando houver Extensions
         try {
-          foreach ($f in [System.IO.Directory]::EnumerateFiles($dir, '*', $enumOpt)) {
-            try {
-              $name = [System.IO.Path]::GetFileName($f)
-              $ext  = [System.IO.Path]::GetExtension($f)
-              if (& $IsMatch $f $name $ext) {
-                if ($meta) {
-                  try {
-                    $fi = [System.IO.FileInfo]::new($f)
-                    $results.Add([pscustomobject]@{ FullName=$fi.FullName; Name=$fi.Name; Extension=$fi.Extension; LengthBytes=$fi.Length; LastWriteTimeUtc=$fi.LastWriteTimeUtc }) | Out-Null
-                  } catch {
+          foreach ($pat in $patterns) {
+            foreach ($f in [System.IO.Directory]::EnumerateFiles($dir, $pat, $enumOpt)) {
+              try {
+                $name = [System.IO.Path]::GetFileName($f)
+                $ext  = [System.IO.Path]::GetExtension($f)
+
+                if ($extSet) { if (-not $extSet.Contains($ext)) { continue } }
+
+                if (& $IsMatch $f $name $ext) {
+                  if ($meta) {
+                    try {
+                      $fi = [System.IO.FileInfo]::new($f)
+                      $results.Add([pscustomobject]@{ FullName=$fi.FullName; Name=$fi.Name; Extension=$fi.Extension; LengthBytes=$fi.Length; LastWriteTimeUtc=$fi.LastWriteTimeUtc }) | Out-Null
+                    } catch {
+                      $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
+                    }
+                  } else {
                     $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
                   }
-                } else {
-                  $results.Add([pscustomobject]@{ FullName=$f; Name=$name; Extension=$ext }) | Out-Null
                 }
-              }
-            } catch { }
+              } catch { }
+            }
           }
         } catch {
           $errors.Add("FILES_FAIL: $dir :: $($_.Exception.Message)") | Out-Null
@@ -457,10 +539,26 @@ else {
   $matcher = New-MatchEvaluator -Query $Query -Mode $Mode -MatchOn $MatchOn -ExtensionSet $extSet
 
   foreach ($wi in $workItems) {
-    $o = Search-Path -StartPath $wi.Path -Recurse ([bool]$wi.Recurse) -IsMatch $matcher -IncludeMetadata:$IncludeMetadata -FollowReparsePoints:$FollowReparsePoints
+    $o = Search-Path `
+      -StartPath $wi.Path `
+      -Recurse ([bool]$wi.Recurse) `
+      -IsMatch $matcher `
+      -IncludeMetadata:$IncludeMetadata `
+      -FollowReparsePoints:$FollowReparsePoints `
+      -ExtensionSet $extSet
+
     foreach ($r in @($o.Results)) { $allResults.Add($r) | Out-Null }
     foreach ($e in @($o.Errors))  { $allErrors.Add([string]$e) | Out-Null }
+
+    $doneWork++
+    if (($doneWork -eq 1) -or ($doneWork -eq $totalWork) -or ($doneWork % $progressEvery -eq 0)) {
+      $pct = if ($totalWork -gt 0) { [int](($doneWork / $totalWork) * 100) } else { 100 }
+      $statusPath = if ([string]::IsNullOrWhiteSpace([string]$wi.Path)) { '(item inválido)' } else { [string]$wi.Path }
+      Write-Progress -Id 1 -Activity $activity -Status ("{0}/{1} | {2}" -f $doneWork, $totalWork, $statusPath) -PercentComplete $pct
+    }
   }
+
+  Write-Progress -Id 1 -Activity $activity -Completed
 }
 
 $final = $allResults | Sort-Object FullName -Unique
@@ -484,6 +582,7 @@ if ($searchTag.Length -gt 80) { $searchTag = $searchTag.Substring(0, 80) }
 $outTxtPath = Join-Path $scriptDir ("Search-{0}-Result_{1}.txt" -f $searchTag,(Get-Date -Format 'dd-MM-yyyy_HH-mm-ss'))
 
 $queryLabel = if ([string]::IsNullOrWhiteSpace($Query)) { '(vazio)' } else { $Query }
+$extensionsLabel = if ($Extensions -and @($Extensions).Count -gt 0) { ((@($Extensions) | Where-Object { $_ }) -join ', ') } else { '(nenhuma)' }
 
 @(
   'Find-FilesFast - Resultado'
@@ -491,7 +590,7 @@ $queryLabel = if ([string]::IsNullOrWhiteSpace($Query)) { '(vazio)' } else { $Qu
   ("Query: {0}" -f $queryLabel)
   ("Mode: {0}" -f $Mode)
   ("MatchOn: {0}" -f (@($MatchOn) -join ', '))
-  ("Extensions: {0}" -f ((@($Extensions) | Where-Object { $_ }) -join ', '))
+  ("Extensions: {0}" -f $extensionsLabel)
   ("Total encontrados: {0}" -f @($final).Count)
   ''
   '=== ARQUIVOS ==='
