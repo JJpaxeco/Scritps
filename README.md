@@ -63,7 +63,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 ## Saida automatica em TXT
 O script gera um arquivo TXT no diretorio do script com este padrao:
 
-- `Search-{TAG}-Result_{dd-MM-yyyy_HH-mm-ss}.txt`
+- `Find-FilesFast-{TAG}-Result_{dd-MM-yyyy_HH-mm-ss}.txt`
 
 Onde **TAG** vem de:
 - `-Query` (se informado), ou
