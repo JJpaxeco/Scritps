@@ -4,7 +4,7 @@ Este repositorio contem tres scripts PowerShell voltados para tarefas comuns no 
 
 - **Find-FilesFast.ps1**: busca de arquivos em **todos os discos/volumes** com foco em desempenho (paralelismo no PowerShell 7+), com **barra de progresso** e **salvamento automatico** dos resultados em TXT.
 - **TemaEscuro_transparenciaOFF.ps1**: aplica **Modo Escuro** e **desativa transparencia** (perfil do usuario), reiniciando o Explorer para aplicar imediatamente.
-- **pendrive-bootavel.ps1**: cria pendrive bootavel do Windows a partir de uma ISO (FAT32/NTFS), com split automatico de `install.wim` em `install.swm` quando necessario.
+- **pendrive-bootavel.ps1**: cria pendrive bootavel do Windows a partir de uma ISO (FAT32/NTFS), com split automatico de `install.wim` em `install.swm` quando necessario, deteccao de `install*.swm` e **log automatico** no diretorio do script.
 
 ---
 
@@ -157,7 +157,11 @@ Exemplo:
 - Em **FAT32**:
   - Se `sources\install.wim` for >= 4GB, divide automaticamente em `install.swm`, `install2.swm`, etc. (DISM `Split-Image`).
   - Se a ISO tiver `sources\install.esd` >= 4GB, converte **ESD -> WIM** (exporta todos os indexes) e depois divide em SWM.
+  - Se a ISO ja contiver `sources\install*.swm`, o script reconhece o cenario e **nao tenta converter/dividir**, apenas copia normalmente.
 - Aplica `bootsect /nt60` (se disponivel) para melhorar compatibilidade com boot **Legacy/BIOS** (nao e necessario para UEFI puro).
+- Se nao houver dispositivos USB para listar, o script exibe aviso e **aguarda uma tecla** para finalizar.
+- Sempre grava um **LOG (Transcript)** no **mesmo diretorio do script**, com o padrao:
+  - `pendrive-bootavel_dd-MM-yyyy_HH-mm-ss.txt`
 
 ## Como executar
 
@@ -177,9 +181,6 @@ Ao final da selecao (por qualquer metodo), o script imprime:
 
 # Totalmente nao interativo (CUIDADO: apaga o disco informado)
 .\pendrive-bootavel.ps1 -IsoPath "C:\ISO\Win11.iso" -DiskNumber 1 -FileSystem FAT32 -Force
-
-# Com log completo via Transcript
-.\pendrive-bootavel.ps1 -IsoPath "C:\ISO\Win10.iso" -DiskNumber 1 -FileSystem NTFS -Force -LogPath "C:\Temp\pendrive-bootavel.log"
 ```
 
 ## Parametros
@@ -187,7 +188,6 @@ Ao final da selecao (por qualquer metodo), o script imprime:
 - `-DiskNumber` (int): numero do disco (conforme `Get-Disk`).
 - `-FileSystem` (FAT32|NTFS): sistema de arquivos do pendrive.
 - `-Force` (switch): pula a confirmacao de seguranca.
-- `-LogPath` (string): salva um transcript (log completo) em arquivo.
 
 ## Observacoes e comportamento
 - Confirmacao de seguranca: o script exige digitar exatamente `SIM` antes de apagar.
@@ -196,6 +196,7 @@ Ao final da selecao (por qualquer metodo), o script imprime:
 - Se a ISO usar `install.esd` grande, a conversao pode exigir espaco livre no `%TEMP%` de aproximadamente **3x** o tamanho do ESD.
 - Robocopy: `ExitCode` **0..7** = sucesso (com variacoes); **>= 8** = falha. Exemplo comum: `ExitCode=3` indica sucesso com copia + extras detectados.
 - Se houver bloqueio por EDR/Device Control, operacoes como `Clear-Disk` podem falhar com `AccessDenied`.
+
 
 ---
 
