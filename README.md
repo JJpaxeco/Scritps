@@ -54,10 +54,10 @@ a
 aasdasdaddas
 Commit
 Get-FileHash
-Print
+`Print`
 
 ```
-
+`Print`
 ---
 
 # 1) Find-FilesFast.ps1
