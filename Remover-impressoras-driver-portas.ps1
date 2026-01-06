@@ -1,17 +1,18 @@
 #requires -RunAsAdministrator
-# Remove TODAS as impressoras (exceto "Microsoft Print to PDF"), remove drivers (incl. tentativas via PrintUI),
-# remove pacotes (Driver Store via pnputil para fornecedores nao-Microsoft) e remove portas (exceto a do PDF).
+# "BRUTAL": remove TODAS as impressoras nao-padrao, drivers (nao-Microsoft), pacotes do Driver Store (nao-Microsoft)
+# e portas (nao usadas), mantendo apenas impressoras padrao do Windows:
+# - Microsoft Print to PDF (obrigatoria)
+# - Microsoft XPS Document Writer (se existir)
+# - Fax (se existir)
 
 $ErrorActionPreference = 'SilentlyContinue'
-$KeepPrinterName = 'Microsoft Print to PDF'
 
 function Test-Admin {
   $id = [Security.Principal.WindowsIdentity]::GetCurrent()
   $p  = New-Object Security.Principal.WindowsPrincipal($id)
   $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
-
-function Log([string]$msg) { Write-Host $msg }
+function Log([string]$m) { Write-Host $m }
 
 if (-not (Test-Admin)) { Log "Execute este script em PowerShell como Administrador."; exit 1 }
 
@@ -19,49 +20,66 @@ if (-not (Test-Admin)) { Log "Execute este script em PowerShell como Administrad
 Set-Service Spooler -StartupType Automatic | Out-Null
 Start-Service Spooler | Out-Null
 
-# Validar impressora a manter
-$keep = Get-Printer -Name $KeepPrinterName
-if (-not $keep) {
-  Log "Nao encontrei '$KeepPrinterName'. Abortando por seguranca (para nao remover tudo sem preservar o PDF)."
-  Log "Printers atuais:"
-  Get-Printer | Select Name,DriverName,PortName | Format-Table -Auto
+# Impressoras padrao (por nome)
+$KeepPrinterPatterns = @(
+  '^Microsoft Print to PDF$',
+  '^Microsoft XPS Document Writer$',
+  '^Fax$'
+)
+
+$allPrinters = Get-Printer
+$keepPrinters = foreach ($p in $allPrinters) {
+  if ($KeepPrinterPatterns | Where-Object { $p.Name -match $_ }) { $p }
+}
+
+# Seguranca: exige que "Microsoft Print to PDF" exista
+if (-not ($keepPrinters | Where-Object { $_.Name -eq 'Microsoft Print to PDF' })) {
+  Log "Nao encontrei 'Microsoft Print to PDF'. Abortando por seguranca."
+  Log "Dica: ative o recurso (se estiver desabilitado) e rode novamente."
+  Log "Impressoras atuais:"
+  $allPrinters | Select Name,DriverName,PortName | Format-Table -Auto
   exit 1
 }
 
-$KeepDriverName = $keep.DriverName
-$KeepPortName   = $keep.PortName
-
-if ([string]::IsNullOrWhiteSpace($KeepDriverName) -or [string]::IsNullOrWhiteSpace($KeepPortName)) {
-  Log "Nao consegui identificar DriverName/PortName do '$KeepPrinterName'. Abortando por seguranca."
-  exit 1
-}
-
-Log "Mantendo: $KeepPrinterName | Driver: $KeepDriverName | Porta: $KeepPortName"
+$keepPrinterNames = $keepPrinters.Name | Select-Object -Unique
+Log "Mantendo impressoras padrao detectadas:"
+$keepPrinters | Select Name,DriverName,PortName | Format-Table -Auto
 
 # -----------------------------
-# 1) REMOVER IMPRESSORAS (BRUTAL)
+# 1) REMOVER IMPRESSORAS (todas exceto padrao)
 # -----------------------------
-$printersToRemove = Get-Printer | Where-Object { $_.Name -ne $KeepPrinterName }
+$printersToRemove = $allPrinters | Where-Object { $keepPrinterNames -notcontains $_.Name }
 
 foreach ($p in $printersToRemove) {
   Log "Removendo impressora: $($p.Name)"
   Remove-Printer -Name $p.Name -Confirm:$false | Out-Null
 
-  # Fallbacks (tenta local e rede)
+  # Fallbacks (local/rede/per-machine)
   cmd /c "rundll32 printui.dll,PrintUIEntry /dl /n `"$($p.Name)`"" | Out-Null
   cmd /c "rundll32 printui.dll,PrintUIEntry /dn /n `"$($p.Name)`"" | Out-Null
   cmd /c "rundll32 printui.dll,PrintUIEntry /gd /n `"$($p.Name)`"" | Out-Null
 }
 
-# Limpar spool na marra (fila travada)
+# Limpeza "na marra" de spool (fila travada)
 Stop-Service Spooler -Force | Out-Null
 Remove-Item "$env:windir\System32\spool\PRINTERS\*" -Force -ErrorAction SilentlyContinue | Out-Null
 Start-Service Spooler | Out-Null
 
+# Recarrega estado
+$remainingPrinters = Get-Printer
+
 # -----------------------------
-# 2) REMOVER DRIVERS (BRUTAL)
+# 2) REMOVER DRIVERS (nao-Microsoft e nao usados por impressoras remanescentes)
 # -----------------------------
-$driversToRemove = Get-PrinterDriver | Where-Object { $_.Name -ne $KeepDriverName } | Select-Object -ExpandProperty Name -Unique
+$driversInUse = $remainingPrinters | Select-Object -ExpandProperty DriverName -Unique
+$allDrivers   = Get-PrinterDriver
+
+$driversToRemove = $allDrivers | Where-Object {
+  ($driversInUse -notcontains $_.Name) -and
+  ($_.Manufacturer -notmatch '^(?i)microsoft\b') -and
+  ($_.Name -notmatch '^(?i)microsoft\b')
+} | Select-Object -ExpandProperty Name -Unique
+
 foreach ($d in $driversToRemove) {
   Log "Removendo driver: $d"
   Remove-PrinterDriver -Name $d | Out-Null
@@ -73,9 +91,9 @@ foreach ($d in $driversToRemove) {
 Restart-Service Spooler -Force | Out-Null
 
 # -----------------------------
-# 3) REMOVER DRIVER PACKAGES (Driver Store) via PNPUTIL (BRUTAL, mas evita Microsoft)
+# 3) REMOVER DRIVER PACKAGES do Driver Store (pnputil) - apenas classe Printer/Impressora e fornecedores NAO-Microsoft
 # -----------------------------
-Log "Removendo driver packages (pnputil) de classe Printer/Impressora para fornecedores NAO-Microsoft..."
+Log "Removendo driver packages (pnputil) - classe Printer/Impressora e fornecedores NAO-Microsoft..."
 $raw = (pnputil /enum-drivers) 2>$null
 $blocks = ($raw -join "`n") -split "(\r?\n){2,}" | Where-Object { $_ -match '\S' }
 
@@ -97,21 +115,24 @@ foreach ($b in $blocks) {
 Restart-Service Spooler -Force | Out-Null
 
 # -----------------------------
-# 4) REMOVER PORTAS (BRUTAL) - mantém SOMENTE a porta do PDF
+# 4) REMOVER PORTAS (mantem as usadas pelas impressoras padrao remanescentes + portas internas)
 # -----------------------------
-Log "Removendo portas (exceto a do PDF): mantendo apenas '$KeepPortName'"
+$remainingPrinters = Get-Printer
+$portsInUse = $remainingPrinters | Select-Object -ExpandProperty PortName -Unique
 
-# Fallback script de porta
+# Portas internas comuns (nao tente "zerar" isso, pode quebrar recursos do sistema)
+$internalKeepPorts = @('PORTPROMPT:','FILE:','XPSPort:','FAX:','SHRFAX:','NUL:') | Select-Object -Unique
+$keepPorts = @($portsInUse + $internalKeepPorts) | Select-Object -Unique
+
+# Fallback prnport.vbs (para TCP/IP/WSD teimosas)
 $prnport = Get-ChildItem "$env:windir\System32\Printing_Admin_Scripts" -Recurse -Filter prnport.vbs -ErrorAction SilentlyContinue |
            Select-Object -First 1 -ExpandProperty FullName
 
-$portsToRemove = Get-PrinterPort | Where-Object { $_.Name -ne $KeepPortName } | Select-Object -ExpandProperty Name -Unique
+$portsToRemove = Get-PrinterPort | Where-Object { $keepPorts -notcontains $_.Name } | Select-Object -ExpandProperty Name -Unique
 
 foreach ($port in $portsToRemove) {
   Log "Removendo porta: $port"
   Remove-PrinterPort -Name $port | Out-Null
-
-  # Fallback (muito util para TCP/IP/WSD teimosas)
   if ($prnport) { cscript.exe //nologo "$prnport" -d -r "$port" | Out-Null }
 }
 
@@ -123,7 +144,7 @@ Restart-Service Spooler -Force | Out-Null
 Log "`n=== RESULTADO FINAL ==="
 Log "`nImpressoras:"
 Get-Printer | Select Name,DriverName,PortName | Format-Table -Auto
-Log "`nDrivers:"
-Get-PrinterDriver | Select Name | Sort Name | Format-Table -Auto
-Log "`nPortas:"
+Log "`nDrivers (restantes):"
+Get-PrinterDriver | Select Name,Manufacturer | Sort Name | Format-Table -Auto
+Log "`nPortas (restantes):"
 Get-PrinterPort | Select Name,PrinterHostAddress,PortNumber | Format-Table -Auto
