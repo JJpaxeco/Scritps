@@ -28,7 +28,7 @@ Este repositorio contem tres scripts PowerShell voltados para tarefas comuns no 
 - Usa cmdlets do modulo **Storage** (`Get-Disk`, `Clear-Disk`, `New-Partition`, `Format-Volume`, etc.)
 - (Opcional) Pode usar seletor de arquivo via **OpenFileDialog**; se indisponivel, cai para entrada por console
 - **Operacao destrutiva**: apaga completamente o disco selecionado (confirmacao obrigatoria, a menos que use `-Force`)
-
+- `sdasdasdasdasdasdasdasdasdasd`
 ---
 
 ## Como executar (basico)
@@ -44,7 +44,7 @@ Este repositorio contem tres scripts PowerShell voltados para tarefas comuns no 
 
 Se sua politica de execucao bloquear scripts, uma opcao comum e liberar apenas na sessao atual:
 
-```powershell
+```html
 Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
 
