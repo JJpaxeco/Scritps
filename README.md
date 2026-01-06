@@ -44,7 +44,7 @@ Este repositorio contem tres scripts PowerShell voltados para tarefas comuns no 
 
 Se sua politica de execucao bloquear scripts, uma opcao comum e liberar apenas na sessao atual:
 
-```html
+```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
 
