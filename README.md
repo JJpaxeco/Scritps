@@ -47,17 +47,6 @@ Se sua politica de execucao bloquear scripts, uma opcao comum e liberar apenas n
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
-```txt
-asdasd
-asdasd
-a
-aasdasdaddas
-Commit
-Get-FileHash
-`Print`
-
-```
-`Print`
 ---
 
 # 1) Find-FilesFast.ps1
