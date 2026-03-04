@@ -222,6 +222,50 @@ Ao final da selecao (por qualquer metodo), o script imprime:
 
 ---
 
+# 4) logoff-remoto.ps1
+
+## O que ele faz
+
+- Permite realizar **logoff remoto** de sessões de usuário em máquinas Windows via rede.
+- Utiliza comandos nativos (`quser`, `query user`, `qwinsta`, `logoff`) para listar e finalizar sessões.
+- Suporta escolha entre logoff de **todas as sessões de usuário** ou de uma **sessão específica** (por ID ou nome de usuário).
+- Exibe informações das sessões encontradas (ID, usuário, nome da sessão) antes da ação.
+- Solicita confirmação antes de executar logoff, evitando desconexões acidentais.
+- Exibe mensagens de sucesso ou erro para cada tentativa de logoff.
+
+## Requisitos
+
+- Windows
+- PowerShell 5.1 ou 7+
+- Permissões administrativas na máquina remota
+- Serviços de RDS/TermService ativos e conectividade RPC
+
+## Como executar
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "caminho\logoff-remoto.ps1"
+# ou
+pwsh.exe -ExecutionPolicy Bypass -NoProfile -File "caminho\logoff-remoto.ps1"
+```
+
+## Fluxo básico
+
+1. Informe o nome ou IP da máquina remota.
+2. O script lista as sessões de usuário conectadas.
+3. Escolha entre:
+   - Finalizar todas as sessões de usuário
+   - Finalizar uma sessão específica (por ID ou nome)
+4. Confirme a ação.
+5. O script executa o logoff e exibe o resultado.
+
+## Observações
+
+- O script não desconecta sessões de sistema (ex.: 'services', 'console') por padrão.
+- Caso não consiga listar sessões, verifique permissões, serviços e regras de firewall.
+- O script é interativo e pode ser executado várias vezes em sequência.
+
+---
+
 ## Notas e limitacoes (geral)
 
 - A busca completa (Find-FilesFast) pode levar tempo dependendo do tamanho dos discos, quantidade de arquivos e permissoes.
