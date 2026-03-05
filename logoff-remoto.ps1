@@ -1,4 +1,4 @@
-# =========================
+﻿# =========================
 # Compatível com Windows PowerShell 5.1 e PowerShell 7+.
 # Execução (PS 5.1): powershell.exe -ExecutionPolicy Bypass -NoProfile -File "CAMINHO_DO_SCRIPT"
 # Execução (PS 7+):  pwsh.exe       -ExecutionPolicy Bypass -NoProfile -File "CAMINHO_DO_SCRIPT"
