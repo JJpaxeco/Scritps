@@ -1,0 +1,15 @@
+Search-*
+AcruxPDV_inicio_automatico.ps1
+Executa-ListaCIM.ps1
+Get-CimInstance.ps1
+LibreHardwareMonitorLib.dll
+Memoria.ps1
+recovery_powershell.ps1
+Stop-Service.bat
+Stop-Service.ps1
+test.ps1
+teste.ps1
+testee.ps1
+USB_BOOTAVEL.bkp_completo.ps1
+USB_BOOTAVEL.ps1
+pendrive-bootavel_*.txt
