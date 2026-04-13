@@ -7,6 +7,8 @@ Memoria.ps1
 recovery_powershell.ps1
 Stop-Service.bat
 Stop-Service.ps1
+Start-Service.bat
+Start-Service.ps1
 test.ps1
 teste.ps1
 testee.ps1
